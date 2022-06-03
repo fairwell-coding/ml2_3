@@ -21,12 +21,12 @@ def load_data():
         - include transform to homogeneous input data
     """
 
-    data_a_train, data_a_test = None, None
-    data_b_train, data_b_test = None, None
 
     """ Start of your code 
     """
 
+    data_a_train, data_a_test = np.load('src\\data_a_test.npy'), np.load('src\\data_a_test.npy')
+    data_b_train, data_b_test = np.load('src\\data_b_train.npy'), np.load('src\\data_b_test.npy')
 
     """ End of your code
     """
@@ -49,14 +49,57 @@ def quadratic():
 
     """ Start of your code 
     """
+    X_train = np.stack([data_a_train[:, 0], data_a_train[:, 1]]).T # X = 100x2
+    Y_train = data_a_train[:, 2] # Y = 100x1
 
+    N = len(Y_train)
+    M = 1 +  X_train.shape[1]
+
+    # calculate weight vector w
+    PHI = feature_transform(X_train)
+    w = invert(PHI.T@PHI) @ PHI.T @ Y_train
+    Y_train_pred = np.sign(PHI @ w.T)
+    # w1 = __calculate_w(PHI, Y)
+    # w - w1 = [0.0, 0.0, 7.632783294297951e-17] 
+
+    X_test = np.stack([data_a_test[:, 0], data_a_test[:, 1]]).T # X = 100x2
+    Y_test = data_a_test[:, 2] # Y = 100x1
+    PHI =  feature_transform(X_test)
+    Y_test_pred = np.sign(PHI @ w.T)
+
+    train_error, test_error = len(np.nonzero(Y_train == Y_train_pred)[0]) / N, len(np.nonzero(Y_test == Y_test_pred)[0]) / N
+
+    # plot training
+
+    marker_size = 30
+    ax[0].scatter(X_train[:, 0], X_train[:, 1], marker_size*Y_train, c='blue', marker='o', label='train data')
+    ax[0].scatter(X_train[:, 0], X_train[:, 1], marker_size*Y_train_pred, c='red',  marker='x', label='train prediction')
+
+    ax[1].scatter(X_test[:, 0], X_test[:, 1], marker_size*Y_test, c='k', marker='o', label='test data')
+    ax[1].scatter(X_test[:, 0], X_test[:, 1], marker_size*Y_test_pred, c='orange', marker='x', label='test prediction')
 
     """ End of your code
     """
 
     ax[0].legend()
     ax[1].legend()
+    plt.show()
     return fig
+
+def feature_transform(X):
+    N = X.shape[0]
+    return np.stack([np.ones((N,)), X[:, 0], X[:, 1]**2]).T # PHI = 100x3
+
+# def __calculate_w(theta, Y):
+#     A = theta.T @ theta
+#     Q, R = np.linalg.qr(A)
+#     z = Q.T @ theta.T @ Y
+#     w = np.linalg.solve(R, z)
+#     return w
+
+def invert(A):
+    Q, R = np.linalg.qr(A)
+    return np.linalg.inv(R) @ Q.T
 
 def logistic():
     """ Subtask 2: Logistic Loss as Convex Surrogate in Binary Classification
@@ -76,14 +119,70 @@ def logistic():
 
     """ Start of your code 
     """
+    X_train = np.stack([data_a_train[:, 0], data_a_train[:, 1]]).T # X = 100x2
+    Y_train = data_a_train[:, 2] # Y = 100x1
 
+    N = len(Y_train)
+    M = 1 +  X_train.shape[1]
+
+    PHI = feature_transform(X_train)
+    L = calculate_lipschitz(PHI)
+    w0 = np.random.uniform(size=(M, 1))
+    
+    k_max = 1000
+    #TODO: calculate engery
+    E = np.zeros((k_max, 1))
+    E_app = np.zeros((k_max, 1))
+    w, E, E_app = nesterov_gradient(Y_train, PHI, w0, L, k_max)
+    Y_train_pred = np.sign(sigmoid(PHI @ w) - 0.5)
+
+    X_test = np.stack([data_a_test[:, 0], data_a_test[:, 1]]).T # X = 100x2
+    Y_test = data_a_test[:, 2] # Y = 100x1
+    
+    PHI = feature_transform(X_test)
+    L = calculate_lipschitz(PHI)
+    w0 = np.random.uniform(size=(M, 1))
+    Y_test_pred = np.sign(sigmoid(PHI @ w) - 0.5)
+
+
+    ax[0].plot(np.arange(1, k_max+1), E)
+
+    marker_size = 30
+    ax[1].scatter(X_train[:, 0], X_train[:, 1], marker_size*Y_train, c='blue', marker='o', label='train data')
+    ax[1].scatter(X_train[:, 0], X_train[:, 1], marker_size*Y_train_pred, c='red',  marker='x', label='train prediction')
+
+    ax[2].scatter(X_test[:, 0], X_test[:, 1], marker_size*Y_test, c='k', marker='o', label='test data')
+    ax[2].scatter(X_test[:, 0], X_test[:, 1], marker_size*Y_test_pred, c='orange', marker='x', label='test prediction')
 
     """ End of your code
     """
 
     ax[1].legend()
     ax[2].legend()
+    plt.show()
     return fig
+
+def calculate_lipschitz(PHI):
+    return 1/4 * np.amax(sigmoid(PHI)) #largest singular value
+
+def nesterov_gradient(y, PHI, w_k, L, k_max):
+
+    E_ = np.zeros((k_max, 1))
+    E_app = np.zeros((k_max, 1))
+    E_prime = lambda w_: sigmoid(y @ PHI @ w_) - 1
+    E = lambda w_: -np.log(sigmoid(y @ PHI @ w_))
+    w_prev = w_k
+    for k in range(1, k_max+1):
+        beta = (k-1)/(k+1)
+        w_k = w_k + beta * (w_k - w_prev)
+        w_prev = w_k
+
+        #TODO: calculate energy (E), not correct yet
+        E_[k-1] = E_prime(w_k) 
+        # E_app[k-1] = approx_fprime(w_k, E)
+        w_k = w_k - 1/L * E_prime(w_k)
+
+    return w_k, E_, E_app
 
 def svm_primal():
     """ Subtask 3: Hinge Loss as Convex Surrogate in Binary Classification
@@ -146,7 +245,9 @@ def svm_dual():
 
 if __name__ == '__main__':
     # load train/test datasets A and B globally
+    global data_a_train, data_a_test, data_b_train, data_b_test, sigmoid
     data_a_train, data_a_test, data_b_train, data_b_test = load_data()
+    sigmoid = np.vectorize(lambda x: 1/(1+np.exp(-x)))
 
     tasks = [quadratic, logistic, svm_primal, svm_dual]
     pdf = PdfPages('figures.pdf')
