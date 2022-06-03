@@ -247,7 +247,7 @@ if __name__ == '__main__':
     # load train/test datasets A and B globally
     global data_a_train, data_a_test, data_b_train, data_b_test, sigmoid
     data_a_train, data_a_test, data_b_train, data_b_test = load_data()
-    sigmoid = np.vectorize(lambda x: 1/(1+np.exp(-x)))
+    sigmoid = (lambda x: 1/(1+np.exp(-x)))
 
     tasks = [quadratic, logistic, svm_primal, svm_dual]
     pdf = PdfPages('figures.pdf')
