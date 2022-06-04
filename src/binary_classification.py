@@ -12,6 +12,10 @@ import matplotlib.pyplot as plt
 from scipy.optimize import approx_fprime
 from matplotlib.backends.backend_pdf import PdfPages
 
+
+global data_a_train, data_a_test, data_b_train, data_b_test
+
+
 def load_data():
     """ General utility function to load provided .npy data
 
@@ -21,12 +25,11 @@ def load_data():
         - include transform to homogeneous input data
     """
 
-
     """ Start of your code 
     """
 
-    data_a_train, data_a_test = np.load('src\\data_a_test.npy'), np.load('src\\data_a_test.npy')
-    data_b_train, data_b_test = np.load('src\\data_b_train.npy'), np.load('src\\data_b_test.npy')
+    data_a_train, data_a_test = np.load('data_a_test.npy'), np.load('data_a_test.npy')
+    data_b_train, data_b_test = np.load('data_b_train.npy'), np.load('data_b_test.npy')
 
     """ End of your code
     """
@@ -42,6 +45,8 @@ def quadratic():
         - indicate the two classes with 2 different colors for both subplots
         - use a legend
     """
+
+
     fig, ax = plt.subplots(1, 2, figsize=(10,5))
     plt.suptitle('Task 1 - Quadratic Loss as Convex Surrogate in Binary Classification', fontsize=12)
     ax[0].set_title('Test Data A')
@@ -60,7 +65,7 @@ def quadratic():
     w = invert(PHI.T@PHI) @ PHI.T @ Y_train
     Y_train_pred = np.sign(PHI @ w.T)
     # w1 = __calculate_w(PHI, Y)
-    # w - w1 = [0.0, 0.0, 7.632783294297951e-17] 
+    # w - w1 = [0.0, 0.0, 7.632783294297951e-17]
 
     X_test = np.stack([data_a_test[:, 0], data_a_test[:, 1]]).T # X = 100x2
     Y_test = data_a_test[:, 2] # Y = 100x1
@@ -69,14 +74,6 @@ def quadratic():
 
     train_error, test_error = len(np.nonzero(Y_train == Y_train_pred)[0]) / N, len(np.nonzero(Y_test == Y_test_pred)[0]) / N
 
-    # plot training
-
-    marker_size = 30
-    ax[0].scatter(X_train[:, 0], X_train[:, 1], marker_size*Y_train, c='blue', marker='o', label='train data')
-    ax[0].scatter(X_train[:, 0], X_train[:, 1], marker_size*Y_train_pred, c='red',  marker='x', label='train prediction')
-
-    ax[1].scatter(X_test[:, 0], X_test[:, 1], marker_size*Y_test, c='k', marker='o', label='test data')
-    ax[1].scatter(X_test[:, 0], X_test[:, 1], marker_size*Y_test_pred, c='orange', marker='x', label='test prediction')
 
     """ End of your code
     """
@@ -128,7 +125,7 @@ def logistic():
     PHI = feature_transform(X_train)
     L = calculate_lipschitz(PHI)
     w0 = np.random.uniform(size=(M, 1))
-    
+
     k_max = 1000
     #TODO: calculate engery
     E = np.zeros((k_max, 1))
@@ -138,7 +135,7 @@ def logistic():
 
     X_test = np.stack([data_a_test[:, 0], data_a_test[:, 1]]).T # X = 100x2
     Y_test = data_a_test[:, 2] # Y = 100x1
-    
+
     PHI = feature_transform(X_test)
     L = calculate_lipschitz(PHI)
     w0 = np.random.uniform(size=(M, 1))
@@ -178,7 +175,7 @@ def nesterov_gradient(y, PHI, w_k, L, k_max):
         w_prev = w_k
 
         #TODO: calculate energy (E), not correct yet
-        E_[k-1] = E_prime(w_k) 
+        E_[k-1] = E_prime(w_k)
         # E_app[k-1] = approx_fprime(w_k, E)
         w_k = w_k - 1/L * E_prime(w_k)
 
@@ -205,6 +202,25 @@ def svm_primal():
     """ Start of your code 
     """
 
+    # load data
+    X_train = np.stack([data_a_train[:, 0], data_a_train[:, 1]]).T # X = 100x2
+    y_train = data_a_train[:, 2] # Y = 100x1
+
+    # hyperparameters
+    lambda_ = 1
+    alpha = 1e-3
+    w = np.zeros((3, 1))
+    delta = 1e-4
+
+    PHI = feature_transform(X_train)
+    w = __proximal_subgradient_method(X_train, y_train, PHI, alpha, lambda_, w, delta)
+    hyperplane = PHI @ w
+
+    marker_size = 30
+    ax[0].scatter(X_train[:50, 0], X_train[:50, 1], marker_size, c='blue', marker='o', label='train data')  # class 1
+    ax[0].scatter(X_train[50:, 0], X_train[50:, 1], marker_size, c='red', marker='o', label='train data')  # class -1
+    # ax[1].scatter(X_train[:, 0], X_train[:, 1], marker_size*y_train_pred, c='red',  marker='x', label='train prediction')
+    plt.show()
 
     """ End of your code
     """
@@ -212,6 +228,25 @@ def svm_primal():
     ax[1].legend()
     ax[2].legend()
     return fig
+
+
+def __proximal_subgradient_method(X_train, y_train, PHI, alpha, lambda_, w_i, delta):
+    epoch = 0
+
+    while (42):
+        g = np.where(y_train.T @ PHI @ w_i >= 1, 0, - PHI.T @ y_train)
+        w_i_1 = w_i - alpha * g.reshape(3,1)
+        w_i_1 = w_i_1 / (1 + lambda_ * alpha)
+
+        grad_diff = np.abs(w_i_1 - w_i)
+        print(f'Gradient diff for iteration {epoch} = {grad_diff}.')
+
+        if np.all(grad_diff < delta):
+            return w_i_1
+
+        w_i = w_i_1
+        epoch += 1
+
 
 def svm_dual():
     """ Subtask 4: Dual SVM
@@ -243,13 +278,15 @@ def svm_dual():
     ax[2].legend()
     return fig
 
+
 if __name__ == '__main__':
     # load train/test datasets A and B globally
     global data_a_train, data_a_test, data_b_train, data_b_test, sigmoid
     data_a_train, data_a_test, data_b_train, data_b_test = load_data()
     sigmoid = (lambda x: 1/(1+np.exp(-x)))
 
-    tasks = [quadratic, logistic, svm_primal, svm_dual]
+    # tasks = [quadratic, logistic, svm_primal, svm_dual]
+    tasks = [svm_primal]
     pdf = PdfPages('figures.pdf')
     for task in tasks:
         f = task()
