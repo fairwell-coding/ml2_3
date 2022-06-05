@@ -207,9 +207,9 @@ def svm_primal():
     y_train = data_a_train[:, 2] # Y = 100x1
 
     # hyperparameters
-    lambda_ = 1
-    alpha = 1e-3
-    w = np.zeros((3, 1))
+    lambda_ = 10
+    alpha = 1e-2
+    w = np.random.normal(loc=0, scale=1.0, size=(3, 1))
     delta = 1e-4
 
     PHI = feature_transform(X_train)
@@ -243,34 +243,43 @@ def plot_decision_boundary(X, w, ax, plot_step=0.05):
     ax.contour(xx, yy, Z, colors='orange')
 
 
-def __proximal_subgradient_method(X_train, y_train, PHI, alpha, lambda_, w_i, delta):
-    N = X_train.shape[0]
+def __proximal_subgradient_method(X, y, PHI, alpha, lambda_, w_i_1, delta):
+    N = X.shape[0]
     epoch = 0
+    w_i_1_schlange_old = np.zeros((3, 1))
 
     while (42):
-        g = np.where(y_train.T @ PHI @ w_i >= 1, 0, - PHI.T @ y_train)
-        w_i_1 = w_i - alpha * g.reshape(3, 1) * 1 / N
+        b = y.T @ PHI @ w_i_1 - 1  # update bias
+        w_schlange = np.concatenate((b.reshape(1, 1), w_i_1[1:]))
+        g = np.where(y.T @ (PHI @ w_schlange) >= 1, 0, - PHI.T @ y).reshape(3, 1) * 1 / N  # analytical_grad = g
+        w_i_1_schlange = w_schlange - alpha * g
         w_i_1 = w_i_1 / (1 + lambda_ * alpha)
 
         # compare numerical and analytical gradients
-        numerical_grad = approx_fprime(PHI, __hinge_loss, 1e-8, N, lambda_, w_i, w_i_1, y_train)
-        grad_diff = np.abs(g - numerical_grad)
+        numerical_grad = 0
+        for i in range(X.shape[0]):
+            numerical_grad += approx_fprime(feature_transform(X[i].reshape(1, 2)).flatten(), __hinge_loss, 1e-8, y[i], lambda_, w_i_1_schlange)
 
-        w_diff = np.abs(w_i_1 - w_i)
-        # print(f'Gradient diff for iteration {epoch} = {grad_diff}.')
+        numerical_grad = numerical_grad / N
 
-        if np.all(w_diff < delta):
-            return w_i_1
+        grad_diff = np.abs(w_i_1_schlange.flatten() - numerical_grad)
 
-        w_i = w_i_1
+        w_diff = np.abs(w_i_1_schlange - w_i_1_schlange_old)
+        print(f'Gradient diff for iteration {epoch} = {grad_diff} | {w_diff}.')
+
+        if epoch > 1 and np.all(w_diff < delta):
+            return w_i_1_schlange
+
+        w_i_1_schlange_old = w_i_1_schlange
+
         epoch += 1
 
     print(f'Proximal subgradient method converged after {epoch} epochs using delta = {delta} for all coordinates of gradient vector.')
 
 
-def __hinge_loss(PHI, N, lambda_, w_i, w_i_1, y_train):
-    # return lambda_ / 2 * np.linalg.norm(w_i_1) ** 2 + 1 / N * np.sum(np.maximum(0, 1 - y_train.T @ PHI @ w_i), axis=0)
-    return lambda_ / 2 * np.linalg.norm(w_i_1) ** 2 + 1 / N * np.sum(np.maximum(0, 1 - y_train.T @ PHI @ w_i), axis=0)
+def __hinge_loss(x, y, lambda_, w_i_1):
+    # return lambda_ / 2 * np.linalg.norm(w_i_1) ** 2 + 1 / N * np.sum(np.maximum(0, 1 - y_train.T @ PHI @ w_i_1), axis=0)
+    return lambda_ / 2 * np.linalg.norm(w_i_1) ** 2 + np.maximum(0, 1 - y * (w_i_1.T @ x.reshape(3, 1))).reshape(1)
 
 
 def svm_dual():
