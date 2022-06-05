@@ -83,9 +83,11 @@ def quadratic():
     plt.show()
     return fig
 
+
 def feature_transform(X):
     N = X.shape[0]
-    return np.stack([np.ones((N,)), X[:, 0], X[:, 1]**2]).T # PHI = 100x3
+    return np.stack([np.ones((N,)), X[:, 0], X[:, 1]]).T  # PHI = 100x3
+
 
 # def __calculate_w(theta, Y):
 #     A = theta.T @ theta
@@ -94,9 +96,11 @@ def feature_transform(X):
 #     w = np.linalg.solve(R, z)
 #     return w
 
+
 def invert(A):
     Q, R = np.linalg.qr(A)
     return np.linalg.inv(R) @ Q.T
+
 
 def logistic():
     """ Subtask 2: Logistic Loss as Convex Surrogate in Binary Classification
@@ -203,25 +207,28 @@ def svm_primal():
     """
 
     # load data
-    X_train = np.stack([data_a_train[:, 0], data_a_train[:, 1]]).T # X = 100x2
-    y_train = data_a_train[:, 2] # Y = 100x1
+    X_train = np.stack([data_a_train[:, 0], data_a_train[:, 1]]).T  # X = 100x2
+    y_train = data_a_train[:, 2]  # y = 100x1
+    X_test = np.stack([data_a_test[:, 0], data_a_test[:, 1]]).T  # X = 100x2
+    y_test = data_a_test[:, 2]  # y = 100x1
 
     # hyperparameters
     lambda_ = 10
     alpha = 1e-2
     w = np.random.normal(loc=0, scale=1.0, size=(3, 1))
+    w[0] = 0.0
     delta = 1e-4
 
     PHI = feature_transform(X_train)
-    w = __proximal_subgradient_method(X_train, y_train, PHI, alpha, lambda_, w, delta)
-    hyperplane = PHI @ w
+    w, b = __proximal_subgradient_method(X_train, y_train, PHI, alpha, lambda_, w, delta)
 
-    marker_size = 30
-    ax[0].scatter(X_train[:50, 0], X_train[:50, 1], marker_size, c='blue', marker='o', label='train data')  # class 1
-    ax[0].scatter(X_train[50:, 0], X_train[50:, 1], marker_size, c='red', marker='o', label='train data')  # class -1
-    plot_decision_boundary(X_train, w, ax[0], plot_step=0.01)
-    # ax[1].scatter(X_train[:, 0], X_train[:, 1], marker_size*y_train_pred, c='red',  marker='x', label='train prediction')
-    plt.show()
+    y_train_pred = np.sign(feature_transform(X_train) @ w - b)
+    y_test_pred = np.sign(feature_transform(X_test) @ w - b)
+
+    train_acc, test_acc = len(np.nonzero(y_train == y_train_pred)[0]) / X_train.shape[0], len(np.nonzero(y_test == y_test_pred)[0]) / X_test.shape[0]
+    print(f'SVM primal space: train_acc = {train_acc}, test_acc = {test_acc}')
+
+    __plots_svm_primal(PHI, X_train, ax, w)
 
     """ End of your code
     """
@@ -229,6 +236,15 @@ def svm_primal():
     ax[1].legend()
     ax[2].legend()
     return fig
+
+
+def __plots_svm_primal(PHI, X_train, ax, w):
+    hyperplane = PHI @ w
+    marker_size = 30
+    ax[0].scatter(X_train[:50, 0], X_train[:50, 1], marker_size, c='blue', marker='o', label='train data')  # class 1
+    ax[0].scatter(X_train[50:, 0], X_train[50:, 1], marker_size, c='red', marker='o', label='train data')  # class -1
+    plot_decision_boundary(X_train, w, ax[0], plot_step=0.01)
+    plt.show()
 
 
 def plot_decision_boundary(X, w, ax, plot_step=0.05):
@@ -249,7 +265,7 @@ def __proximal_subgradient_method(X, y, PHI, alpha, lambda_, w_i_1, delta):
     w_i_1_schlange_old = np.zeros((3, 1))
 
     while (42):
-        b = y.T @ PHI @ w_i_1 - 1  # update bias
+        b = 1 - y.T @ PHI @ w_i_1  # update bias
         w_schlange = np.concatenate((b.reshape(1, 1), w_i_1[1:]))
         g = np.where(y.T @ (PHI @ w_schlange) >= 1, 0, - PHI.T @ y).reshape(3, 1) * 1 / N  # analytical_grad = g
         w_i_1_schlange = w_schlange - alpha * g
@@ -265,10 +281,10 @@ def __proximal_subgradient_method(X, y, PHI, alpha, lambda_, w_i_1, delta):
         grad_diff = np.abs(w_i_1_schlange.flatten() - numerical_grad)
 
         w_diff = np.abs(w_i_1_schlange - w_i_1_schlange_old)
-        print(f'Gradient diff for iteration {epoch} = {grad_diff} | {w_diff}.')
+        print(f'Gradient, w and b diff for iteration {epoch} = {grad_diff} | {w_diff} | {b}.')
 
         if epoch > 1 and np.all(w_diff < delta):
-            return w_i_1_schlange
+            return w_i_1_schlange, b
 
         w_i_1_schlange_old = w_i_1_schlange
 
