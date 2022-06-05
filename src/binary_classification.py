@@ -213,19 +213,23 @@ def svm_primal():
     y_test = data_a_test[:, 2]  # y = 100x1
 
     # hyperparameters
-    lambda_ = 10
+    lambda_ = 1.24
+    # alpha = 0.23
     alpha = 1e-2
-    w = np.random.normal(loc=0, scale=1.0, size=(3, 1))
+    # w = np.random.normal(loc=0, scale=0.2, size=(3, 1))
+    # w = np.zeros((3, 1))
+    w = np.ones((3, 1))
     w[0] = 0.0
     delta = 1e-4
 
     PHI = feature_transform(X_train)
     w, b = __proximal_subgradient_method(X_train, y_train, PHI, alpha, lambda_, w, delta)
 
-    y_train_pred = np.sign(feature_transform(X_train) @ w - b)
-    y_test_pred = np.sign(feature_transform(X_test) @ w - b)
+    y_train_pred = np.sign(feature_transform(X_train) @ w)
+    y_test_pred = np.sign(feature_transform(X_test) @ w)
 
-    train_acc, test_acc = len(np.nonzero(y_train == y_train_pred)[0]) / X_train.shape[0], len(np.nonzero(y_test == y_test_pred)[0]) / X_test.shape[0]
+    train_acc, test_acc = len(np.nonzero(y_train.reshape(y_train.shape[0], 1) == y_train_pred)[0]) / X_train.shape[0], len(np.nonzero(y_test.reshape(y_test.shape[0], 1) == y_test_pred)[0]) / \
+                          X_test.shape[0]
     print(f'SVM primal space: train_acc = {train_acc}, test_acc = {test_acc}')
 
     __plots_svm_primal(PHI, X_train, ax, w)
@@ -263,11 +267,15 @@ def __proximal_subgradient_method(X, y, PHI, alpha, lambda_, w_i_1, delta):
     N = X.shape[0]
     epoch = 0
     w_i_1_schlange_old = np.zeros((3, 1))
+    b = w_i_1[0]
 
     while (42):
-        b = 1 - y.T @ PHI @ w_i_1  # update bias
+        # b = b - alpha
+        # w_i_1[0] = w_i_1[0] - alpha
+        # b = 1 - y.T @ PHI @ w_i_1  # update bias
+        b = np.mean(y.reshape(100, 1) - (PHI @ w_i_1))
         w_schlange = np.concatenate((b.reshape(1, 1), w_i_1[1:]))
-        g = np.where(y.T @ (PHI @ w_schlange) >= 1, 0, - PHI.T @ y).reshape(3, 1) * 1 / N  # analytical_grad = g
+        g = np.where(y.T @ (PHI @ w_schlange) >= 1, np.zeros((3, )), - PHI.T @ y).reshape(3, 1) * 1 / N  # analytical_grad = g
         w_i_1_schlange = w_schlange - alpha * g
         w_i_1 = w_i_1 / (1 + lambda_ * alpha)
 
