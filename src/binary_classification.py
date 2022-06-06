@@ -11,6 +11,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import approx_fprime
 from matplotlib.backends.backend_pdf import PdfPages
+from sympy import re
 
 
 global data_a_train, data_a_test, data_b_train, data_b_test
@@ -137,7 +138,7 @@ def logistic():
 
     PHI = feature_transform(X_train)
     L = calculate_lipschitz(PHI)
-    w0 = np.random.uniform(size=(M, 1))
+    w0 = np.ones((M, 1))
 
     k_max = 1000
     #TODO: calculate engery
@@ -187,10 +188,9 @@ def calculate_lipschitz(PHI):
 def log_loss(X, y, w):
     N = len(y)
     PHI = X#feature_transform(X.reshape((N, 2)))
+    np.nan_to_num
     w = w.reshape((3,1))
-    y = y.reshape((N, 1))
-    return np.sum(np.log(1 + np.exp(-y * PHI @ w)), axis=0)
-    # return -np.sum(np.log(sigmoid(y * PHI @ w)))
+    return np.log(1 + np.exp(- y * PHI @ w)).sum()
 
 def grad_log_loss(X, y, w):
     N = len(y)
@@ -210,12 +210,12 @@ def nesterov_gradient(y, X, w0, L, k_max):
     for k in range(1, k_max+1):
         beta = (k-1)/(k+1)
         w_ = w  + beta * (w - w_old)
-        E_.append(log_loss(PHI, y, w_))
-        if (k-1)%10 == 0:      
-            E_app = approx_fprime(w_.flatten(), lambda w__: log_loss(PHI, y, w__), 1e-8)
-            print(f'{log_loss(PHI, y, w_)} | {E_app.flatten()} | {grad_log_loss(PHI, y, w_).flatten()}')
         w_old = w
         w = w_ - 1/L * grad_log_loss(PHI, y, w_).reshape((3, 1))
+        E_.append(log_loss(PHI, y, w))
+        if (k-1)%10 == 0:      
+            E_app = approx_fprime(w.flatten(), lambda w__: log_loss(PHI, y, w__), 1e-8)
+            print(f'{log_loss(PHI, y, w)} | {E_app.flatten()} | {grad_log_loss(PHI, y, w).flatten()}')
 
     return w, np.array(E_)
 
@@ -248,7 +248,7 @@ def svm_primal():
 
     # hyperparameters
     lambda_ = 1e-4  # 1.24
-    alpha = 0.2
+    alpha = 1
     w = np.ones((3, 1))
     w[0] = 0.0
     delta = 1e-4
@@ -308,28 +308,23 @@ def __proximal_subgradient_method(PHI, y, alpha, lambda_, w_i_1, delta):
     while (42):
         b = np.mean(y.reshape(100, 1) - (PHI @ w_i_1))
         w_schlange = np.concatenate((b.reshape(1, 1), w_i_1[1:]))
-        # g = np.where(y.T @ (PHI @ w_schlange) >= 1, np.zeros((3, )), - PHI.T @ y).reshape(3, 1) * 1 / N  # analytical_grad = g
         g = np.mean(np.where(y.reshape((100, 1)) * (PHI @ w_i_1 + b) >= 1, 0, -y.reshape((100, 1)) * PHI), axis=0).reshape(3, 1)
-        numerical_grad = 0
+        numerical_grad = 0 
         for i in range(y.shape[0]):
             numerical_grad += approx_fprime(PHI[i], __hinge_loss, 1e-8, y[i], lambda_, w_schlange)
 
         numerical_grad = numerical_grad / N
-        # w_i_1_schlange = w_schlange - alpha * g
-        # w_i_1 = w_i_1 / (1 + lambda_ * alpha)
         
-        w_i_1_schlange = w_schlange - alpha * numerical_grad.reshape(3, 1)
+        w_i_1_schlange = w_schlange - alpha * g#  numerical_grad.reshape(3, 1)
         w_i_1 = w_i_1 / (1 + lambda_ * alpha)
 
         # compare numerical and analytical gradients
-
-
         grad_diff = np.abs(g.flatten() - numerical_grad).flatten()
 
         w_diff = np.abs(w_i_1_schlange - w_i_1_schlange_old).flatten()
         print(f'Gradient, w and b diff for iteration {epoch} = {grad_diff} | {w_diff} | {b}.')
 
-        if epoch > 1000 or np.all(w_diff < 1e-8):
+        if epoch > 1000 or np.all(w_diff < 1e-4):
             return w_i_1_schlange, b
 
         w_i_1_schlange_old = w_i_1_schlange
@@ -339,12 +334,7 @@ def __proximal_subgradient_method(PHI, y, alpha, lambda_, w_i_1, delta):
     print(f'Proximal subgradient method converged after {epoch} epochs using delta = {delta} for all coordinates of gradient vector.')
 
 
-# def __hinge_loss(phi, y, lambda_, w_i_1):
-#     return (lambda_ / 2) * np.linalg.norm(w_i_1[1:]) ** 2 + np.maximum(0, 1 - y * (w_i_1.T @ phi)).reshape(1)
-
-
 def __hinge_loss(x, y, lambda_, w_i_1):
-    # return lambda / 2 * np.linalg.norm(w_i_1) ** 2 + 1 / N * np.sum(np.maximum(0, 1 - y_train.T @ PHI @ w_i_1), axis=0)
     w = w_i_1[1:]
     b = w_i_1[0]
     phi = x[1:]
@@ -389,7 +379,7 @@ if __name__ == '__main__':
     sigmoid = (lambda x: 1/(1+np.exp(-x)))
 
     # tasks = [quadratic, logistic, svm_primal, svm_dual]
-    tasks = [quadratic]
+    tasks = [svm_primal]
     pdf = PdfPages('figures.pdf')
     for task in tasks:
         f = task()
