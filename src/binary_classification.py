@@ -213,17 +213,14 @@ def svm_primal():
     y_test = data_a_test[:, 2]  # y = 100x1
 
     # hyperparameters
-    lambda_ = 1.24
-    # alpha = 0.23
+    lambda_ = 1.24  # 1.24
     alpha = 1e-2
-    # w = np.random.normal(loc=0, scale=0.2, size=(3, 1))
-    # w = np.zeros((3, 1))
     w = np.ones((3, 1))
     w[0] = 0.0
     delta = 1e-4
 
     PHI = feature_transform(X_train)
-    w, b = __proximal_subgradient_method(X_train, y_train, PHI, alpha, lambda_, w, delta)
+    w, b = __proximal_subgradient_method(PHI, y_train, alpha, lambda_, w, delta)
 
     y_train_pred = np.sign(feature_transform(X_train) @ w)
     y_test_pred = np.sign(feature_transform(X_test) @ w)
@@ -243,7 +240,6 @@ def svm_primal():
 
 
 def __plots_svm_primal(PHI, X_train, ax, w):
-    hyperplane = PHI @ w
     marker_size = 30
     ax[0].scatter(X_train[:50, 0], X_train[:50, 1], marker_size, c='blue', marker='o', label='train data')  # class 1
     ax[0].scatter(X_train[50:, 0], X_train[50:, 1], marker_size, c='red', marker='o', label='train data')  # class -1
@@ -259,12 +255,18 @@ def plot_decision_boundary(X, w, ax, plot_step=0.05):
 
     Z = feature_transform(np.c_[xx.ravel(), yy.ravel()]) @ w
     Z = Z.reshape(xx.shape)
-    Z = np.where(np.round(Z, 3) == 0, 1, 0)
-    ax.contour(xx, yy, Z, colors='orange')
+    hyperplane = np.where(np.round(Z, 3) == 0, 1, 0)
+    ax.contour(xx, yy, hyperplane, colors='black')
+
+    class1 = np.where(np.round(Z, 3) == 1, 1, 0)
+    ax.contour(xx, yy, class1, colors='grey')
+
+    class2 = np.where(np.round(Z, 3) == -1, 1, 0)
+    ax.contour(xx, yy, class2, colors='grey')
 
 
-def __proximal_subgradient_method(X, y, PHI, alpha, lambda_, w_i_1, delta):
-    N = X.shape[0]
+def __proximal_subgradient_method(PHI, y, alpha, lambda_, w_i_1, delta):
+    N = y.shape[0]
     epoch = 0
     w_i_1_schlange_old = np.zeros((3, 1))
     b = w_i_1[0]
@@ -275,18 +277,19 @@ def __proximal_subgradient_method(X, y, PHI, alpha, lambda_, w_i_1, delta):
         # b = 1 - y.T @ PHI @ w_i_1  # update bias
         b = np.mean(y.reshape(100, 1) - (PHI @ w_i_1))
         w_schlange = np.concatenate((b.reshape(1, 1), w_i_1[1:]))
-        g = np.where(y.T @ (PHI @ w_schlange) >= 1, np.zeros((3, )), - PHI.T @ y).reshape(3, 1) * 1 / N  # analytical_grad = g
+        # g = np.where(y.T @ (PHI @ w_schlange) >= 1, np.zeros((3, )), - PHI.T @ y).reshape(3, 1) * 1 / N  # analytical_grad = g
+        g = np.mean(np.where(y.reshape((100, 1)) * (PHI @ w_i_1 + b) >= 1, 0, -y.reshape((100, 1)) * PHI), axis=0).reshape(3, 1)
         w_i_1_schlange = w_schlange - alpha * g
         w_i_1 = w_i_1 / (1 + lambda_ * alpha)
 
         # compare numerical and analytical gradients
         numerical_grad = 0
-        for i in range(X.shape[0]):
-            numerical_grad += approx_fprime(feature_transform(X[i].reshape(1, 2)).flatten(), __hinge_loss, 1e-8, y[i], lambda_, w_i_1_schlange)
+        for i in range(y.shape[0]):
+            numerical_grad += approx_fprime(PHI[i], __hinge_loss, 1e-8, y[i], lambda_, w_schlange)
 
         numerical_grad = numerical_grad / N
 
-        grad_diff = np.abs(w_i_1_schlange.flatten() - numerical_grad)
+        grad_diff = np.abs(g.flatten() - numerical_grad)
 
         w_diff = np.abs(w_i_1_schlange - w_i_1_schlange_old)
         print(f'Gradient, w and b diff for iteration {epoch} = {grad_diff} | {w_diff} | {b}.')
@@ -301,9 +304,16 @@ def __proximal_subgradient_method(X, y, PHI, alpha, lambda_, w_i_1, delta):
     print(f'Proximal subgradient method converged after {epoch} epochs using delta = {delta} for all coordinates of gradient vector.')
 
 
+# def __hinge_loss(phi, y, lambda_, w_i_1):
+#     return (lambda_ / 2) * np.linalg.norm(w_i_1[1:]) ** 2 + np.maximum(0, 1 - y * (w_i_1.T @ phi)).reshape(1)
+
+
 def __hinge_loss(x, y, lambda_, w_i_1):
-    # return lambda_ / 2 * np.linalg.norm(w_i_1) ** 2 + 1 / N * np.sum(np.maximum(0, 1 - y_train.T @ PHI @ w_i_1), axis=0)
-    return lambda_ / 2 * np.linalg.norm(w_i_1) ** 2 + np.maximum(0, 1 - y * (w_i_1.T @ x.reshape(3, 1))).reshape(1)
+    # return lambda / 2 * np.linalg.norm(w_i_1) ** 2 + 1 / N * np.sum(np.maximum(0, 1 - y_train.T @ PHI @ w_i_1), axis=0)
+    w = w_i_1[1:]
+    b = w_i_1[0]
+    phi = x[1:]
+    return lambda_ / 2 * np.linalg.norm(w) ** 2 + np.maximum(0, 1 - y * (w.T @ phi + b))
 
 
 def svm_dual():
