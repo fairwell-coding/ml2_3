@@ -11,7 +11,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import approx_fprime
 from matplotlib.backends.backend_pdf import PdfPages
-from sympy import re
 
 
 global data_a_train, data_a_test, data_b_train, data_b_test
@@ -29,8 +28,8 @@ def load_data():
     """ Start of your code 
     """
 
-    data_a_train, data_a_test = np.load('src/data_a_test.npy'), np.load('src/data_a_test.npy')
-    data_b_train, data_b_test = np.load('src/data_b_train.npy'), np.load('src/data_b_test.npy')
+    data_a_train, data_a_test = np.load('data_a_test.npy'), np.load('data_a_test.npy')
+    data_b_train, data_b_test = np.load('data_b_train.npy'), np.load('data_b_test.npy')
 
     """ End of your code
     """
@@ -254,7 +253,7 @@ def svm_primal():
     delta = 1e-4
 
     PHI = feature_transform(X_train)
-    w, b = __proximal_subgradient_method(PHI, y_train, alpha, lambda_, w, delta)
+    w, b, sv_indices = __proximal_subgradient_method(PHI, y_train, alpha, lambda_, w, delta)
 
     y_train_pred = np.sign(feature_transform(X_train) @ w + b)
     y_test_pred = np.sign(feature_transform(X_test) @ w + b)
@@ -263,7 +262,7 @@ def svm_primal():
                           X_test.shape[0]
     print(f'SVM primal space: train_acc = {train_acc}, test_acc = {test_acc}')
 
-    __plots_svm_primal(PHI, X_train, ax, w, b)
+    __plots_svm_primal(PHI, X_train, ax, w, b, sv_indices)
 
     """ End of your code
     """
@@ -273,30 +272,30 @@ def svm_primal():
     return fig
 
 
-def __plots_svm_primal(PHI, X_train, ax, w, b):
+def __plots_svm_primal(PHI, X, ax, w, b, sv_indices):
     marker_size = 30
-    ax[0].scatter(X_train[:50, 0], X_train[:50, 1], marker_size, c='blue', marker='o', label='train data')  # class 1
-    ax[0].scatter(X_train[50:, 0], X_train[50:, 1], marker_size, c='red', marker='o', label='train data')  # class -1
-    plot_decision_boundary(X_train, w, ax[0], b, plot_step=0.01)
+    ax[0].scatter(X[:50, 0], X[:50, 1], marker_size, c='blue', marker='o', label='train data')  # class 1
+    ax[0].scatter(X[50:, 0], X[50:, 1], marker_size, c='red', marker='o', label='train data')  # class -1
+    plot_decision_boundary(X, w, ax[0], b, plot_step=0.01)
+    ax[0].scatter(X[:, 0][sv_indices], X[:, 1][sv_indices], s=100, linewidth=1, facecolors='none', edgecolors='k')  # support vectors
+
     plt.show()
 
 
 def plot_decision_boundary(X, w, ax, b, plot_step=0.05):
-    x_min, x_max = X[:, 0].min(), X[:, 0].max()
-    y_min, y_max = X[:, 1].min(), X[:, 1].max()
-    xx, yy = np.meshgrid(np.arange(x_min, x_max, plot_step),
-                           np.arange(y_min, y_max, plot_step))
+    limits = ax.axis()
+    ax.axis(limits)
+    dx1 = np.array([-6, 2])
+    dx2 = -((w[0] + dx1*w[1]) / w[2]).flatten()
+    ax.plot(dx1, dx2, '-', color="black", linewidth=2.0)
 
-    Z = feature_transform(np.c_[xx.ravel(), yy.ravel()]) @ w + b
-    Z = Z.reshape(xx.shape)
-    hyperplane = np.where(np.round(Z, 2) == 0, 1, 0)
-    ax.contour(xx, yy, hyperplane, colors='black')
+    dx1 = np.array([-6, 2])
+    dx2 = -(((w[0] - 1) + dx1*w[1]) / w[2]).flatten()
+    ax.plot(dx1, dx2, '-', color="grey", linewidth=1.0)
 
-    class1 = np.where(np.round(Z, 2) == 1, 1, 0)
-    ax.contour(xx, yy, class1, colors='grey')
-
-    class2 = np.where(np.round(Z, 2) == -1, 1, 0)
-    ax.contour(xx, yy, class2, colors='grey')
+    dx1 = np.array([-6, 2])
+    dx2 = -(((w[0] + 1) + dx1 * w[1]) / w[2]).flatten()
+    ax.plot(dx1, dx2, '-', color="grey", linewidth=1.0)
 
 
 def __proximal_subgradient_method(PHI, y, alpha, lambda_, w_i_1, delta):
@@ -315,7 +314,7 @@ def __proximal_subgradient_method(PHI, y, alpha, lambda_, w_i_1, delta):
 
         numerical_grad = numerical_grad / N
         
-        w_i_1_schlange = w_schlange - alpha * g#  numerical_grad.reshape(3, 1)
+        w_i_1_schlange = w_schlange - alpha * g
         w_i_1 = w_i_1 / (1 + lambda_ * alpha)
 
         # compare numerical and analytical gradients
@@ -325,7 +324,9 @@ def __proximal_subgradient_method(PHI, y, alpha, lambda_, w_i_1, delta):
         print(f'Gradient, w and b diff for iteration {epoch} = {grad_diff} | {w_diff} | {b}.')
 
         if epoch > 1000 or np.all(w_diff < 1e-4):
-            return w_i_1_schlange, b
+            # sv_indices = np.argwhere(y.reshape((100, 1)) * (PHI @ w_i_1 + b) <= 1)[:, 0]
+            sv_indices = np.argwhere(np.round(np.abs(y.reshape((100, 1)) * (PHI @ w_i_1 + b)), 1) == 1)[:, 0]
+            return w_i_1_schlange, b, sv_indices
 
         w_i_1_schlange_old = w_i_1_schlange
 
