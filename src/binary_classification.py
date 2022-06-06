@@ -98,7 +98,7 @@ def quadratic():
 
 def feature_transform(X):
     N = X.shape[0]
-    return np.stack([np.ones((N,)), X[:, 0], X[:, 1]**2]).T # PHI = 100x3
+    return np.stack([np.ones((N,)), X[:, 0], X[:, 1]]).T # PHI = 100x3
 
 # def __calculate_w(theta, Y):
 #     A = theta.T @ theta
@@ -389,7 +389,7 @@ if __name__ == '__main__':
     sigmoid = (lambda x: 1/(1+np.exp(-x)))
 
     # tasks = [quadratic, logistic, svm_primal, svm_dual]
-    tasks = [logistic]
+    tasks = [quadratic]
     pdf = PdfPages('figures.pdf')
     for task in tasks:
         f = task()
