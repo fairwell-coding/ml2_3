@@ -527,6 +527,7 @@ def svm_dual():
 
     """ Start of your code 
     """
+
     N_train = len(data_b_train)
     N_test = len(data_b_test)
 
@@ -538,9 +539,6 @@ def svm_dual():
     
     # hyperparameters
     sigma = 1
-    N_train = len(y_train)
-    N_test = len(y_test)
-    steps = 200000
     step_size = 1e-3
     delta = 1e-4
 
