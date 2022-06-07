@@ -28,8 +28,8 @@ def load_data():
     """ Start of your code 
     """
 
-    data_a_train, data_a_test = np.load('src/data_a_test.npy'), np.load('src/data_a_test.npy')
-    data_b_train, data_b_test = np.load('src/data_b_train.npy'), np.load('src/data_b_test.npy')
+    data_a_train, data_a_test = np.load('data_a_test.npy'), np.load('data_a_test.npy')
+    data_b_train, data_b_test = np.load('data_b_train.npy'), np.load('data_b_test.npy')
 
     """ End of your code
     """
@@ -392,16 +392,22 @@ def __hinge_loss(x, y, lambda_, w_i_1):
     phi = x[1:]
     return lambda_ / 2 * np.linalg.norm(w) ** 2 + np.maximum(0, 1 - y * (w.T @ phi + b))
 
-def K(Xn, Xm, sigma):
 
-    #TODO: create kernel using matrix-vector notation
+def create_kernel(Xn, Xm, sigma):
+    """ Create kernel defined in eq (13)
+    """
+
     K = np.zeros((Xn.shape[0], Xm.shape[0]))
     for i in range(0, len(Xn)):
         for j in range(0, len(Xm)):
             K[i, j] = np.exp(- np.linalg.norm(Xn[i,:] - Xm[j, :])**2/(2*sigma**2))
 
-    return K
-    #return np.exp(- np.linalg.norm(Xn @ Xm.T, axis=0)**2/(2*sigma**2))
+    # kernel in matrix-vector notation
+    K_matrix = np.exp(- np.linalg.norm(Xn.reshape(Xn.shape[0], Xn.shape[1], 1) - Xm.reshape(Xm.shape[0], Xm.shape[1], 1).T, axis=1) / (2 * sigma**2))  # np.amax(K-K_matrix) = max_diff =
+    # 0.10520138377921817
+
+    return K_matrix
+
 
 def Q(y, K):
     Q_ = np.zeros_like(K)
@@ -413,47 +419,45 @@ def Q(y, K):
 
     return Q_
 
-def D(alpha, Q_):
-    
-    # alpha = np.zeros(())
-    # for i in range(0, K.shape[0]):
-    #     for j in range(0, K.shape[1]):
-    #         d[i] = 1/(y[i] * y[j] * K[i, j])
 
+def D(alpha, Q_):
     return alpha - 1/2 * alpha.T @ Q_ @ alpha
 
+
 def grad_D(alpha, Q_):
-
-    # d = np.zeros_like(y)
-    # for i in range(0, K.shape[0]):
-    #     for j in range(0, K.shape[1]):
-    #         d[i] = 1/(y[i] * y[j] * K[i, j])
-    #         #K[i, j] = np.exp(- np.linalg.norm(Xn[i,:] - Xm[j, :])**2/(2*sigma**2))
-
-    # return d.reshape((200, 1))
-    #return invert(y.T @ y * K)
-
     return 1 - Q_ @ alpha
 
-def projected_gradient_asc(N, steps, step_size, y, K, delta):
 
-    Q_ = Q(y, K)
-    alpha = np.zeros((N, 1))
-    alpha_old = alpha#
-    a_ = step_size
-    for i in range(0, steps):
-        alpha_old = alpha
-        alpha = np.maximum(0, alpha_old + a_ * grad_D(alpha_old, Q_))
+def projected_gradient_ascent(N, step_size, y, K, delta):
+    """ Projected gradient descent as described in algorithm 3.
+    """
 
-        diff = np.abs(np.linalg.norm(alpha) - np.linalg.norm(alpha_old)).flatten()
-        print(f'Iteration: {i+1} and current norm delta: {diff}')
-        #TODO: adjust convergence criterium
-        if diff < delta:
-            return alpha
-    return alpha
+    a_i = np.zeros((N, 1))  # initialize Lagrange coefficients
+    epochs = 0  # counter variable used for error tracking
+    Q_ = Q(y, K)  # define matrix Q
+
+    while True:
+        epochs += 1
+        a_i_1 = np.maximum(0, a_i + step_size * grad_D(a_i, Q_))
+
+        # Check convergence
+        a_diff = np.sum(np.abs(a_i_1 - a_i))
+        if epochs % 100 == 0:
+            print(f'Iteration {epochs} has an absolute summed difference of Lagrange multipliers {a_diff}.')
+
+        if a_diff < delta:
+            print(f'Final Lagrange multiplier difference after {epochs} epochs is {a_diff}.')
+            return a_i_1
+
+        a_i = a_i_1
+
 
 def predict_svm_dual(y, alpha, K, b=0):
-    return y @ ((alpha.T @ K).T @ alpha.T) + b
+    # return y @ ((alpha.T @ K).T @ alpha.T) + b
+
+
+
+    return - 1 / alpha * K * alpha
 
 
 def plot_svm_dual(X, y, y_pred, alpha, ax):        # plot data points
@@ -482,7 +486,7 @@ def decision_boundary_svm_dual(ax, Xn, y, alpha):
 
     # PHI = feature_transform(np.c_[xx.ravel(), yy.ravel()])
     X = np.c_[xx.ravel(), yy.ravel()]
-    Z = (alpha.T @ K(Xn, X, 1)).T @ alpha.T
+    Z = (alpha.T @ create_kernel(Xn, X, 1)).T @ alpha.T
     
     #Z = Z.reshape(xx.shape)
     hyperplane = np.where(np.round(Z, 2) == 0, 1, 0)
@@ -496,8 +500,11 @@ def decision_boundary_svm_dual(ax, Xn, y, alpha):
 
     # class2 = np.where(np.round(Z, 2) == -1, 1, 0)
     # ax.contour(xx, yy, class2, colors='grey')
+
+
 def bias(alpha, yi, yj, K):
     return np.mean(yi.T - yj * (alpha.T @ K))
+
 
 def svm_dual():
     """ Subtask 4: Dual SVM
@@ -511,7 +518,7 @@ def svm_dual():
             - for the train data include the support vectors
     """
 
-    fig, ax = plt.subplots(1,3, figsize=(15,5))
+    fig, ax = plt.subplots(1, 3, figsize=(15, 5))
     plt.suptitle('Task 4 - Dual Support Vector Machine', fontsize=12)
     
     ax[0].set_title('Energy $D(\mathbf{a})$')
@@ -526,29 +533,29 @@ def svm_dual():
     X_train = np.stack([data_b_train[:, 0], data_b_train[:, 1]]).T  # X = 100x2
     y_train = data_b_train[:, 2].reshape((N_train, 1))  # y = 100x1
 
-
     X_test = np.stack([data_b_test[:, 0], data_b_test[:, 1]]).T  # X = 100x2
     y_test = data_b_test[:, 2].reshape((N_test, 1))  # y = 100x1
     
     # hyperparameters
     sigma = 1
-    N = len(y_train)
+    N_train = len(y_train)
+    N_test = len(y_test)
     steps = 200000
-    step_size = 0.001
+    step_size = 1e-3
     delta = 1e-4
 
-    
-    kernel_train = K(X_train, X_train, sigma)
-    kernel_test = K(X_train, X_test, sigma)
-    alpha = projected_gradient_asc(N, steps, step_size, y_train, kernel_train, delta)
+    kernel_train = create_kernel(X_train, X_train, sigma)
+    kernel_test = create_kernel(X_test, X_train, sigma)
+    alpha = projected_gradient_ascent(N_train, step_size, y_train, kernel_train, delta)
 
-    #TODO: check if prediction is really correct, since y_pred >= 0 for all y
-    # maybe a bias is needed
-    b = bias(alpha, y_test, y_test, kernel_test) #seems to be 0 anyway
-    y_pred_test = predict_svm_dual(y_test.T, alpha, kernel_test)  
-    y_pred_train = predict_svm_dual(y_train.T, alpha, kernel_train)      
-    plot_svm_dual(X_train, y_train, y_pred_train, alpha, ax[1])
+    y_train_pred = np.sign((kernel_train @ alpha) * y_train)
+    y_test_pred = np.sign((kernel_test @ alpha) * y_test)
+    train_acc, test_acc = len(np.nonzero(y_train == y_train_pred)[0]) / N_train, len(np.nonzero(y_test == y_test_pred)[0]) / N_test
 
+    print(f'SVM dual space: train_acc = {train_acc}, test_acc = {test_acc}')
+
+    # plots
+    # plot_svm_dual(X_train, y_train, y_pred_train, alpha, ax[1])
     #TODO: implement decision boundary
     # decision_boundary_svm_dual(ax[1], X_train, y_train, alpha)
     plt.show()
@@ -558,6 +565,7 @@ def svm_dual():
 
     ax[1].legend()
     ax[2].legend()
+
     return fig
 
 
@@ -568,7 +576,7 @@ if __name__ == '__main__':
     sigmoid = (lambda x: 1/(1+np.exp(-x)))
 
     # tasks = [quadratic, logistic, svm_primal, svm_dual]
-    tasks = [svm_primal]
+    tasks = [svm_dual]
     pdf = PdfPages('figures.pdf')
     for task in tasks:
         f = task()
