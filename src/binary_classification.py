@@ -28,8 +28,8 @@ def load_data():
     """ Start of your code 
     """
 
-    data_a_train, data_a_test = np.load('data_a_test.npy'), np.load('data_a_test.npy')
-    data_b_train, data_b_test = np.load('data_b_train.npy'), np.load('data_b_test.npy')
+    data_a_train, data_a_test = np.load('src/data_a_test.npy'), np.load('src/data_a_test.npy')
+    data_b_train, data_b_test = np.load('src/data_b_train.npy'), np.load('src/data_b_test.npy')
 
     """ End of your code
     """
@@ -183,6 +183,10 @@ def logistic():
 def calculate_lipschitz(PHI):
     return 1/4 * np.amax(sigmoid(PHI)) #largest singular value
 
+def loss2(y, y_hat):
+    y = np.clip(y+1, 0, 1)
+    loss = -np.mean(y*(np.log(y_hat)) - (1-y)*np.log(1-y_hat))
+    return loss
 
 def log_loss(X, y, w):
     N = len(y)
@@ -211,7 +215,8 @@ def nesterov_gradient(y, X, w0, L, k_max):
         w_ = w  + beta * (w - w_old)
         w_old = w
         w = w_ - 1/L * grad_log_loss(PHI, y, w_).reshape((3, 1))
-        E_.append(log_loss(PHI, y, w))
+        E_.append(log_loss(y, sigmoid(PHI @ w)))
+        # E_.append(log_loss(PHI, y, w))
         if (k-1)%10 == 0:      
             E_app = approx_fprime(w.flatten(), lambda w__: log_loss(PHI, y, w__), 1e-8)
             print(f'{log_loss(PHI, y, w)} | {E_app.flatten()} | {grad_log_loss(PHI, y, w).flatten()}')
@@ -239,6 +244,7 @@ def svm_primal():
     """ Start of your code 
     """
 
+    marker_size = 30
     # load data
     X_train = np.stack([data_a_train[:, 0], data_a_train[:, 1]]).T  # X = 100x2
     y_train = data_a_train[:, 2]  # y = 100x1
@@ -247,22 +253,29 @@ def svm_primal():
 
     # hyperparameters
     lambda_ = 1e-4  # 1.24
-    alpha = 1
+    alpha = 0.9
     w = np.ones((3, 1))
     w[0] = 0.0
     delta = 1e-4
 
     PHI = feature_transform(X_train)
-    w, b, sv_indices = __proximal_subgradient_method(PHI, y_train, alpha, lambda_, w, delta)
+    w, b = __proximal_subgradient_method(PHI, y_train, alpha, lambda_, w, delta)
 
-    y_train_pred = np.sign(feature_transform(X_train) @ w + b)
-    y_test_pred = np.sign(feature_transform(X_test) @ w + b)
+    y_train_pred = np.sign(feature_transform(X_train) @ w )
+    y_test_pred = np.sign(feature_transform(X_test) @ w )
+
+
+    # b = np.mean(1- y_train.reshape((100, 1)) * PHI  @ w)
+    support_vectors = feature_transform(X_train) @ w #+ 
+    
+    sv_indices_c1 = np.nonzero(np.isclose(np.round(support_vectors, 2),  1, atol=0.05))[0]
+    sv_indices_c2 = np.nonzero(np.isclose(np.round(support_vectors, 2), -1, atol=0.05))[0]
 
     train_acc, test_acc = len(np.nonzero(y_train.reshape(y_train.shape[0], 1) == y_train_pred)[0]) / X_train.shape[0], len(np.nonzero(y_test.reshape(y_test.shape[0], 1) == y_test_pred)[0]) / \
                           X_test.shape[0]
     print(f'SVM primal space: train_acc = {train_acc}, test_acc = {test_acc}')
 
-    __plots_svm_primal(PHI, X_train, ax, w, b, sv_indices)
+    __plots_svm_primal(PHI, X_train, ax, w, b, marker_size, sv_indices_c1, sv_indices_c2)
 
     """ End of your code
     """
@@ -271,31 +284,70 @@ def svm_primal():
     ax[2].legend()
     return fig
 
-
-def __plots_svm_primal(PHI, X, ax, w, b, sv_indices):
-    marker_size = 30
-    ax[0].scatter(X[:50, 0], X[:50, 1], marker_size, c='blue', marker='o', label='train data')  # class 1
-    ax[0].scatter(X[50:, 0], X[50:, 1], marker_size, c='red', marker='o', label='train data')  # class -1
-    plot_decision_boundary(X, w, ax[0], b, plot_step=0.01)
-    ax[0].scatter(X[:, 0][sv_indices], X[:, 1][sv_indices], s=100, linewidth=1, facecolors='none', edgecolors='k')  # support vectors
-
+def __plots_svm_primal(PHI, X_train, ax, w, b, marker_size, sv_indices_c1, sv_indices_c2):
+    
+    # plot data points
+    ax[0].scatter(X_train[:50, 0], X_train[:50, 1], marker_size, c='blue', marker='o', label='train data')  # class 1
+    ax[0].scatter(X_train[50:, 0], X_train[50:, 1], marker_size, c='red', marker='o', label='train data')  # class -1
+    
+    #TODO: implement a better plot (only circles)
+    # plot the support vectors
+    ax[0].scatter(X_train[sv_indices_c1, 0], X_train[sv_indices_c1, 1], marker_size + 3, c='green', marker='o', label='train data')  # class 1
+    ax[0].scatter(X_train[sv_indices_c2, 0], X_train[sv_indices_c2, 1], marker_size + 3, c='green', marker='o', label='train data')  # class 1
+    plot_decision_boundary(X_train, w, ax[0], b, plot_step=0.01)
     plt.show()
 
+def plot_decision_boundary(X, w, ax, b, plot_step=0.01):
 
-def plot_decision_boundary(X, w, ax, b, plot_step=0.05):
+    # to check if it is really correct
+    # x_min, x_max = X[:, 0].min(), X[:, 0].max()
+    # y_min, y_max = X[:, 1].min(), X[:, 1].max()
+    # xx, yy = np.meshgrid(np.arange(x_min, x_max, plot_step),
+    #                        np.arange(y_min, y_max, plot_step))
+
+    # # PHI = feature_transform(np.c_[xx.ravel(), yy.ravel()])
+    # Z = PHI @ w # b is already included in w
+    
+    # #plotSVM(w, ax)
+    # Z = Z.reshape(xx.shape)
+    # hyperplane = np.where(np.round(Z, 2) == 0, 1, 0)
+    # ax.contour(xx, yy, hyperplane, colors='black')
+
+    # class1 = np.where(np.round(Z, 2) == 1, 1, 0)
+    # ax.contour(xx, yy, class1, colors='grey')
+
+    # class2 = np.where(np.round(Z, 2) == -1, 1, 0)
+    # ax.contour(xx, yy, class2, colors='grey')
+
+
+    # limits = ax.axis()
+    # ax.axis(limits)
+    # dx1 = np.array([-6, 2])
+    # dx2 = -(w[0] + dx1*w[1:].reshape((1, 2))).flatten()
+    # ax.plot(dx1, dx2, '-', color="black", linewidth=2.0)
+    
+    # dx1 = np.array([-6, 2])
+    # dx2 = -((w[0]-1) + dx1*w[1:].reshape((1, 2))).flatten()
+    # ax.plot(dx1, dx2, '-', color="grey", linewidth=1.0)
+
+    # dx1 = np.array([-6, 2])
+    # dx2 = -((w[0]+1) + dx1*w[1:].reshape((1, 2))).flatten()
+    # ax.plot(dx1, dx2, '-', color="grey", linewidth=1.0)
+
     limits = ax.axis()
     ax.axis(limits)
     dx1 = np.array([-6, 2])
-    dx2 = -((w[0] + dx1*w[1]) / w[2]).flatten()
+    dx2 = -((w[0] + dx1*w[1])/w[2]).flatten()
     ax.plot(dx1, dx2, '-', color="black", linewidth=2.0)
-
+    
     dx1 = np.array([-6, 2])
-    dx2 = -(((w[0] - 1) + dx1*w[1]) / w[2]).flatten()
+    dx2 = -(((w[0]-1) + dx1*w[1])/w[2]).flatten()
     ax.plot(dx1, dx2, '-', color="grey", linewidth=1.0)
 
     dx1 = np.array([-6, 2])
-    dx2 = -(((w[0] + 1) + dx1 * w[1]) / w[2]).flatten()
+    dx2 = -(((w[0]+1) + dx1*w[1])/w[2]).flatten()
     ax.plot(dx1, dx2, '-', color="grey", linewidth=1.0)
+
 
 
 def __proximal_subgradient_method(PHI, y, alpha, lambda_, w_i_1, delta):
@@ -306,6 +358,7 @@ def __proximal_subgradient_method(PHI, y, alpha, lambda_, w_i_1, delta):
 
     while (42):
         b = np.mean(y.reshape(100, 1) - (PHI @ w_i_1))
+        # b = np.mean(-1 + y.reshape(100, 1) * (PHI @ w_i_1))
         w_schlange = np.concatenate((b.reshape(1, 1), w_i_1[1:]))
         g = np.mean(np.where(y.reshape((100, 1)) * (PHI @ w_i_1 + b) >= 1, 0, -y.reshape((100, 1)) * PHI), axis=0).reshape(3, 1)
         numerical_grad = 0 
@@ -314,7 +367,7 @@ def __proximal_subgradient_method(PHI, y, alpha, lambda_, w_i_1, delta):
 
         numerical_grad = numerical_grad / N
         
-        w_i_1_schlange = w_schlange - alpha * g
+        w_i_1_schlange = w_schlange - alpha * g#  numerical_grad.reshape(3, 1)
         w_i_1 = w_i_1 / (1 + lambda_ * alpha)
 
         # compare numerical and analytical gradients
@@ -323,10 +376,8 @@ def __proximal_subgradient_method(PHI, y, alpha, lambda_, w_i_1, delta):
         w_diff = np.abs(w_i_1_schlange - w_i_1_schlange_old).flatten()
         print(f'Gradient, w and b diff for iteration {epoch} = {grad_diff} | {w_diff} | {b}.')
 
-        if epoch > 1000 or np.all(w_diff < 1e-4):
-            # sv_indices = np.argwhere(y.reshape((100, 1)) * (PHI @ w_i_1 + b) <= 1)[:, 0]
-            sv_indices = np.argwhere(np.round(np.abs(y.reshape((100, 1)) * (PHI @ w_i_1 + b)), 1) == 1)[:, 0]
-            return w_i_1_schlange, b, sv_indices
+        if epoch > 4000 or np.all(w_diff < delta):
+            return w_i_1_schlange, b
 
         w_i_1_schlange_old = w_i_1_schlange
 
@@ -341,6 +392,112 @@ def __hinge_loss(x, y, lambda_, w_i_1):
     phi = x[1:]
     return lambda_ / 2 * np.linalg.norm(w) ** 2 + np.maximum(0, 1 - y * (w.T @ phi + b))
 
+def K(Xn, Xm, sigma):
+
+    #TODO: create kernel using matrix-vector notation
+    K = np.zeros((Xn.shape[0], Xm.shape[0]))
+    for i in range(0, len(Xn)):
+        for j in range(0, len(Xm)):
+            K[i, j] = np.exp(- np.linalg.norm(Xn[i,:] - Xm[j, :])**2/(2*sigma**2))
+
+    return K
+    #return np.exp(- np.linalg.norm(Xn @ Xm.T, axis=0)**2/(2*sigma**2))
+
+def Q(y, K):
+    Q_ = np.zeros_like(K)
+    for i in range(0, Q_.shape[0]):
+        yi = y[i]
+        for j in range(0, Q_.shape[1]):
+            yj = y[j]
+            Q_[i, j] = yi * yj * K[i, j]
+
+    return Q_
+
+def D(alpha, Q_):
+    
+    # alpha = np.zeros(())
+    # for i in range(0, K.shape[0]):
+    #     for j in range(0, K.shape[1]):
+    #         d[i] = 1/(y[i] * y[j] * K[i, j])
+
+    return alpha - 1/2 * alpha.T @ Q_ @ alpha
+
+def grad_D(alpha, Q_):
+
+    # d = np.zeros_like(y)
+    # for i in range(0, K.shape[0]):
+    #     for j in range(0, K.shape[1]):
+    #         d[i] = 1/(y[i] * y[j] * K[i, j])
+    #         #K[i, j] = np.exp(- np.linalg.norm(Xn[i,:] - Xm[j, :])**2/(2*sigma**2))
+
+    # return d.reshape((200, 1))
+    #return invert(y.T @ y * K)
+
+    return 1 - Q_ @ alpha
+
+def projected_gradient_asc(N, steps, step_size, y, K, delta):
+
+    Q_ = Q(y, K)
+    alpha = np.zeros((N, 1))
+    alpha_old = alpha#
+    a_ = step_size
+    for i in range(0, steps):
+        alpha_old = alpha
+        alpha = np.maximum(0, alpha_old + a_ * grad_D(alpha_old, Q_))
+
+        diff = np.abs(np.linalg.norm(alpha) - np.linalg.norm(alpha_old)).flatten()
+        print(f'Iteration: {i+1} and current norm delta: {diff}')
+        #TODO: adjust convergence criterium
+        if diff < delta:
+            return alpha
+    return alpha
+
+def predict_svm_dual(y, alpha, K, b=0):
+    return y @ ((alpha.T @ K).T @ alpha.T) + b
+
+
+def plot_svm_dual(X, y, y_pred, alpha, ax):        # plot data points
+
+    marker_size = 60
+    c1_ind = np.nonzero(y == 1)
+    c2_ind = np.nonzero(y == -1)
+    ax.scatter(X[c1_ind, 0], X[c1_ind, 1], marker_size, c='blue', marker='o', label='train data +')  # class 1
+    ax.scatter(X[c2_ind, 0], X[c2_ind, 1], marker_size, c='red', marker='o', label='train data x')  # class -1
+    
+    # TODO: prediction is not -1 and 1...??
+    c1_ind = np.nonzero(y_pred > 0)
+    c2_ind = np.nonzero(y_pred == 0)
+    ax.scatter(X[c1_ind, 0], X[c1_ind, 1], marker_size, c='k', marker='+', label='train data pred +')  # class 1
+    ax.scatter(X[c2_ind, 0], X[c2_ind, 1], marker_size, c='k', marker='x', label='train data pred x')  # class -1
+
+
+def decision_boundary_svm_dual(ax, Xn, y, alpha):
+    plot_step = 0.1
+    res = 50
+    # to check if it is really correct
+    x_min, x_max = Xn[:, 0].min(), Xn[:, 0].max()
+    y_min, y_max = Xn[:, 1].min(), Xn[:, 1].max()
+    xx, yy = np.meshgrid(np.linspace(x_min, x_max, res),
+                         np.linspace(x_min, x_max, res))
+
+    # PHI = feature_transform(np.c_[xx.ravel(), yy.ravel()])
+    X = np.c_[xx.ravel(), yy.ravel()]
+    Z = (alpha.T @ K(Xn, X, 1)).T @ alpha.T
+    
+    #Z = Z.reshape(xx.shape)
+    hyperplane = np.where(np.round(Z, 2) == 0, 1, 0)
+    #ax.matshow(Z)
+    xx, yy = np.meshgrid(np.linspace(x_min, x_max, res),
+                         np.linspace(x_min, x_max, res))
+    ax.contour(xx, yy, hyperplane, colors='black')
+
+    # class1 = np.where(np.round(Z, 2) == 1, 1, 0)
+    # ax.contour(xx, yy, class1, colors='grey')
+
+    # class2 = np.where(np.round(Z, 2) == -1, 1, 0)
+    # ax.contour(xx, yy, class2, colors='grey')
+def bias(alpha, yi, yj, K):
+    return np.mean(yi.T - yj * (alpha.T @ K))
 
 def svm_dual():
     """ Subtask 4: Dual SVM
@@ -363,7 +520,38 @@ def svm_dual():
 
     """ Start of your code 
     """
+    N_train = len(data_b_train)
+    N_test = len(data_b_test)
 
+    X_train = np.stack([data_b_train[:, 0], data_b_train[:, 1]]).T  # X = 100x2
+    y_train = data_b_train[:, 2].reshape((N_train, 1))  # y = 100x1
+
+
+    X_test = np.stack([data_b_test[:, 0], data_b_test[:, 1]]).T  # X = 100x2
+    y_test = data_b_test[:, 2].reshape((N_test, 1))  # y = 100x1
+    
+    # hyperparameters
+    sigma = 1
+    N = len(y_train)
+    steps = 200000
+    step_size = 0.001
+    delta = 1e-4
+
+    
+    kernel_train = K(X_train, X_train, sigma)
+    kernel_test = K(X_train, X_test, sigma)
+    alpha = projected_gradient_asc(N, steps, step_size, y_train, kernel_train, delta)
+
+    #TODO: check if prediction is really correct, since y_pred >= 0 for all y
+    # maybe a bias is needed
+    b = bias(alpha, y_test, y_test, kernel_test) #seems to be 0 anyway
+    y_pred_test = predict_svm_dual(y_test.T, alpha, kernel_test)  
+    y_pred_train = predict_svm_dual(y_train.T, alpha, kernel_train)      
+    plot_svm_dual(X_train, y_train, y_pred_train, alpha, ax[1])
+
+    #TODO: implement decision boundary
+    # decision_boundary_svm_dual(ax[1], X_train, y_train, alpha)
+    plt.show()
 
     """ End of your code
     """
@@ -387,4 +575,3 @@ if __name__ == '__main__':
         pdf.savefig(f)
 
     pdf.close()
-
