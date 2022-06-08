@@ -267,11 +267,11 @@ def svm_primal():
     y_test_pred = np.sign(feature_transform(X_test) @ w )
 
 
-    # b = np.mean(1- y_train.reshape((100, 1)) * PHI  @ w)
-    support_vectors = feature_transform(X_train) @ w #+ 
+    support_vectors = y_train.reshape((100,1)) * (feature_transform(X_train) @ w) #+ 
+    b = w[0]
     
-    sv_indices_c1 = np.nonzero(np.isclose(np.round(support_vectors, 2),  1, atol=0.1))[0]
-    sv_indices_c2 = np.nonzero(np.isclose(np.round(support_vectors, 2), -1, atol=0.1))[0]
+    sv_indices_c1 = np.nonzero(np.isclose(np.round(support_vectors, 2),  1/np.linalg.norm(w), atol=0.1))[0]
+    sv_indices_c2 = np.nonzero(np.isclose(np.round(support_vectors, 2), -1/np.linalg.norm(w), atol=0.1))[0]
 
     train_acc, test_acc = len(np.nonzero(y_train.reshape(y_train.shape[0], 1) == y_train_pred)[0]) / X_train.shape[0], len(np.nonzero(y_test.reshape(y_test.shape[0], 1) == y_test_pred)[0]) / \
                           X_test.shape[0]
@@ -315,13 +315,24 @@ def plot_decision_boundary(X, w, ax):
     dx2 = -((w[0] + dx1*w[1])/w[2]).flatten()
     ax.plot(dx1, dx2, '-', color="black", linewidth=2.0)
     
-    dx1 = np.array([-6, 2])
-    dx2 = -(((w[0]-1) + dx1*w[1])/w[2]).flatten()
-    ax.plot(dx1, dx2, '--', color="grey", linewidth=1.0)
+    # dx1 = np.array([-6, 2])
+    # dx2 = -(((w[0]-1) + dx1*w[1])/w[2]).flatten()
+    # ax.plot(dx1, dx2, '--', color="grey", linewidth=1.0)
 
-    dx1 = np.array([-6, 2])
-    dx2 = -(((w[0]+1) + dx1*w[1])/w[2]).flatten()
-    ax.plot(dx1, dx2, '--', color="grey", linewidth=1.0)
+    # dx1 = np.array([-6, 2])
+    # dx2 = -(((w[0]+1) + dx1*w[1])/w[2]).flatten()
+    # ax.plot(dx1, dx2, '--', color="grey", linewidth=1.0)
+
+    yy = -(w[0] + dx1*w[1])/w[2]
+    a = -w[0] / w[1]
+    margin = 1 / np.sqrt(np.sum(w**2))
+    yy_down = yy - np.sqrt(1 + a**2) * margin
+    yy_up = yy + np.sqrt(1 + a**2) * margin
+    ax.plot(dx1, yy_down, "grey")
+    ax.plot(dx1, yy_up, "grey")
+
+    # plot the line, the points, and the nearest vectors to the plane
+
 
 
 def __proximal_subgradient_method(PHI, y, alpha, lambda_, w_i_1, delta):
