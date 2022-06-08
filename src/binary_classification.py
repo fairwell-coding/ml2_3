@@ -258,7 +258,7 @@ def svm_primal():
     alpha = 0.9
     w = np.ones((3, 1))
     w[0] = 0.0
-    delta = 1e-5
+    delta = 1e-4
 
     PHI = feature_transform(X_train)
     w, loss = __proximal_subgradient_method(PHI, y_train, alpha, lambda_, w, delta)
@@ -284,6 +284,7 @@ def svm_primal():
     plot_decision_boundary(X_train, w, ax[1])
     __plots_svm_primal(ax[2], PHI, X_test, w, marker_size, sv_indices_c1, sv_indices_c2)
     plot_decision_boundary(X_train, w, ax[2])
+    plt.show()
 
 
     """ End of your code
@@ -316,11 +317,11 @@ def plot_decision_boundary(X, w, ax):
     
     dx1 = np.array([-6, 2])
     dx2 = -(((w[0]-1) + dx1*w[1])/w[2]).flatten()
-    ax.plot(dx1, dx2, '-', color="grey", linewidth=1.0)
+    ax.plot(dx1, dx2, '--', color="grey", linewidth=1.0)
 
     dx1 = np.array([-6, 2])
     dx2 = -(((w[0]+1) + dx1*w[1])/w[2]).flatten()
-    ax.plot(dx1, dx2, '-', color="grey", linewidth=1.0)
+    ax.plot(dx1, dx2, '--', color="grey", linewidth=1.0)
 
 
 def __proximal_subgradient_method(PHI, y, alpha, lambda_, w_i_1, delta):
