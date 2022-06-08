@@ -28,8 +28,8 @@ def load_data():
     """ Start of your code 
     """
 
-    data_a_train, data_a_test = np.load('data_a_test.npy'), np.load('data_a_test.npy')
-    data_b_train, data_b_test = np.load('data_b_train.npy'), np.load('data_b_test.npy')
+    data_a_train, data_a_test = np.load('src/data_a_test.npy'), np.load('src/data_a_test.npy')
+    data_b_train, data_b_test = np.load('src/data_b_train.npy'), np.load('src/data_b_test.npy')
 
     """ End of your code
     """
@@ -265,15 +265,16 @@ def svm_primal():
     delta = 1e-4
 
     PHI = feature_transform(X_train)
-    w, loss = __proximal_subgradient_method(PHI, y_train, alpha, lambda_, w, delta)
+    w, b, loss = __proximal_subgradient_method(PHI, y_train, alpha, lambda_, w, delta)
+    # b = np.mean(-(PHI[:, 1:] @ w/ np.linalg.norm(w)))
+    w = np.concatenate([b.reshape((1,1)), w])
+    #w = w / np.linalg.norm(w)
 
+    support_vectors = y_train.reshape((100,1)) * (feature_transform(X_train) @ w) #+ 
     y_train_pred = np.sign(feature_transform(X_train) @ w )
     y_test_pred = np.sign(feature_transform(X_test) @ w )
 
 
-    support_vectors = y_train.reshape((100,1)) * (feature_transform(X_train) @ w) #+
-    b = w[0]
-    
     sv_indices_c1 = np.nonzero(np.isclose(np.round(support_vectors, 2),  1/np.linalg.norm(w), atol=0.1))[0]
     sv_indices_c2 = np.nonzero(np.isclose(np.round(support_vectors, 2), -1/np.linalg.norm(w), atol=0.1))[0]
 
@@ -308,6 +309,7 @@ def __plots_svm_primal(ax, PHI, X_train, w, marker_size, sv_indices_c1, sv_indic
     # plot the support vectors
     ax.scatter(X_train[sv_indices_c1, 0], X_train[sv_indices_c1, 1], marker_size + 50, facecolors='none', edgecolors='k', marker='o', label='train data')  # class 1
     ax.scatter(X_train[sv_indices_c2, 0], X_train[sv_indices_c2, 1], marker_size + 50, facecolors='none', edgecolors='k', marker='o', label='train data')  # class 1
+    
 
 
 def plot_decision_boundary(X, w, ax):
@@ -317,14 +319,6 @@ def plot_decision_boundary(X, w, ax):
     dx1 = np.array([-6, 2])
     dx2 = -((w[0] + dx1*w[1])/w[2]).flatten()
     ax.plot(dx1, dx2, '-', color="black", linewidth=2.0)
-    
-    # dx1 = np.array([-6, 2])
-    # dx2 = -(((w[0]-1) + dx1*w[1])/w[2]).flatten()
-    # ax.plot(dx1, dx2, '--', color="grey", linewidth=1.0)
-
-    # dx1 = np.array([-6, 2])
-    # dx2 = -(((w[0]+1) + dx1*w[1])/w[2]).flatten()
-    # ax.plot(dx1, dx2, '--', color="grey", linewidth=1.0)
 
     yy = -(w[0] + dx1*w[1])/w[2]
     a = -w[0] / w[1]
@@ -341,23 +335,28 @@ def plot_decision_boundary(X, w, ax):
 def __proximal_subgradient_method(PHI, y, alpha, lambda_, w_i_1, delta):
     N = y.shape[0]
     epoch = 0
-    w_i_1_schlange_old = np.zeros((3, 1))
+    w_i_1_schlange_old = np.zeros((2, 1))
+    w_i_1_schlange = np.zeros((2,1))
     b = w_i_1[0]
     loss = []
 
+    PHI = PHI[:, 1:] #100x2
+    w_i_1 = w_i_1[1:] #2x1
+
     while (42):
         epoch += 1
-        b = np.mean(y.reshape(100, 1) - (PHI @ w_i_1))
-        # b = np.mean(-1 + y.reshape(100, 1) * (PHI @ w_i_1))
-        w_schlange = np.concatenate((b.reshape(1, 1), w_i_1[1:]))
-        g = np.mean(np.where(y.reshape((100, 1)) * (PHI @ w_i_1 + b) >= 1, 0, -y.reshape((100, 1)) * PHI), axis=0).reshape(3, 1)
+        #w_schlange = np.concatenate((b.reshape(1, 1), w_i_1))
+        w_schlange = w_i_1
+        g = np.mean(np.where(y.reshape((100, 1)) * (PHI @ w_i_1) + b >= 1, 0, -y.reshape((100, 1)) * PHI), axis=0).reshape(2, 1)
         numerical_grad = 0 
+
         # for i in range(y.shape[0]):
         #     numerical_grad += approx_fprime(PHI[i], __hinge_loss, 1e-8, y[i], lambda_, w_schlange)
 
         # numerical_grad = numerical_grad / N
         
         w_i_1_schlange = w_schlange - alpha * g#  numerical_grad.reshape(3, 1)
+        b = np.mean(-(PHI @ w_i_1_schlange))
         l = hinge_loss(PHI, w_i_1_schlange, y, lambda_)
         loss.append(l)
         w_i_1 = w_i_1 / (1 + lambda_ * alpha)
@@ -366,18 +365,17 @@ def __proximal_subgradient_method(PHI, y, alpha, lambda_, w_i_1, delta):
         grad_diff = np.abs(g.flatten() - numerical_grad).flatten()
 
         w_diff = np.abs(w_i_1_schlange - w_i_1_schlange_old).flatten()
+        # print(f'Gradient, w and b diff for iteration {epoch} = {grad_diff} | {w_diff} | {b} | {l}.')
         if epoch % 100 == 0:
             print(f'Gradient, w and b diff for iteration {epoch} = {grad_diff} | {w_diff} | {b} | {l}.')
 
-        # if np.all(w_diff < delta):
-        #     return w_i_1_schlange, loss
-
-        if epoch > 1 and np.abs(loss[-1] - loss[-2]) < delta:
-            return w_i_1_schlange, loss
+        if epoch > 1 and np.all(w_diff < delta):
+            print(f'Proximal subgradient method converged after {epoch} epochs using delta = {delta} for all coordinates of gradient vector.')
+            return w_i_1_schlange, b, loss
 
         w_i_1_schlange_old = w_i_1_schlange
 
-    print(f'Proximal subgradient method converged after {epoch} epochs using delta = {delta} for all coordinates of gradient vector.')
+
 
 
 def __hinge_loss(x, y, lambda_, w_i_1):
@@ -389,7 +387,6 @@ def __hinge_loss(x, y, lambda_, w_i_1):
 def hinge_loss(PHI, w, y, l_):
     y = y.reshape((len(y), 1))
     return np.sum(l_/2 * np.linalg.norm(w) ** 2 + np.maximum(0, 1 - y * (PHI @ w)))
-
 
 def create_kernel(Xn, Xm, sigma):
     """ Create kernel defined in eq (13)
@@ -578,7 +575,7 @@ if __name__ == '__main__':
     sigmoid = (lambda x: 1/(1+np.exp(-x)))
 
     # tasks = [quadratic, logistic, svm_primal, svm_dual]
-    tasks = [logistic]
+    tasks = [svm_primal]
     pdf = PdfPages('figures.pdf')
     for task in tasks:
         f = task()
