@@ -11,7 +11,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import approx_fprime
 from matplotlib.backends.backend_pdf import PdfPages
-from sympy import maximum
 
 
 global data_a_train, data_a_test, data_b_train, data_b_test
@@ -29,8 +28,8 @@ def load_data():
     """ Start of your code 
     """
 
-    data_a_train, data_a_test = np.load('src/data_a_test.npy'), np.load('src/data_a_test.npy')
-    data_b_train, data_b_test = np.load('src/data_b_train.npy'), np.load('src/data_b_test.npy')
+    data_a_train, data_a_test = np.load('data_a_test.npy'), np.load('data_a_test.npy')
+    data_b_train, data_b_test = np.load('data_b_train.npy'), np.load('data_b_test.npy')
 
     """ End of your code
     """
@@ -58,8 +57,8 @@ def quadratic():
     X_train = np.stack([data_a_train[:, 0], data_a_train[:, 1]]).T # X = 100x2
     Y_train = data_a_train[:, 2] # Y = 100x1
 
-    N = len(Y_train)
-    M = 1 +  X_train.shape[1]
+    N_train = len(Y_train)
+    M = 1 + X_train.shape[1]
 
     # calculate weight vector w
     PHI = feature_transform(X_train)
@@ -70,10 +69,12 @@ def quadratic():
 
     X_test = np.stack([data_a_test[:, 0], data_a_test[:, 1]]).T # X = 100x2
     Y_test = data_a_test[:, 2] # Y = 100x1
+    N_test = len(Y_test)
     PHI =  feature_transform(X_test)
     Y_test_pred = np.sign(PHI @ w.T)
  
-    train_acc, test_acc = len(np.nonzero(Y_train == Y_train_pred)[0]) / N, len(np.nonzero(Y_test == Y_test_pred)[0]) / N
+    train_acc, test_acc = len(np.nonzero(Y_train == Y_train_pred)[0]) / N_train, len(np.nonzero(Y_test == Y_test_pred)[0]) / N_test
+    print(f'The quadratic problem has training accuracy = {train_acc} and test accuracy = {test_acc}.')
 
     C1_ind = np.nonzero(Y_test >= 0)
     C2_ind = np.nonzero(Y_test < 0)
@@ -150,9 +151,14 @@ def logistic():
     X_test = np.stack([data_a_test[:, 0], data_a_test[:, 1]]).T # X = 100x2
     Y_test = data_a_test[:, 2] # Y = 100x1
 
+    N_train = len(Y_train)
+    N_test = len(Y_test)
+
     PHI = feature_transform(X_test)
     Y_test_pred = np.where(sigmoid(PHI @ w) < 0.5, -1 ,1)
 
+    train_acc, test_acc = len(np.nonzero(Y_train.reshape((N_train, 1)) == Y_train_pred)[0]) / N_train, len(np.nonzero(Y_test.reshape((N_test, 1)) == Y_test_pred)[0]) / N_test
+    print(f'The logistic regression has training accuracy = {train_acc} and test accuracy = {test_acc}.')
 
     iters = np.arange(1, len(E))
     ax[0].loglog(iters, E[:-1]-E.min(), color="blue", linewidth=2.0, label="Logistic loss")
@@ -191,9 +197,7 @@ def loss2(y, y_hat):
 
 def log_loss(X, y, w):
     N = len(y)
-    PHI = X#feature_transform(X.reshape((N, 2)))
-    np.nan_to_num
-    w = w.reshape((3,1))
+    PHI = feature_transform(X)
     return np.log(1 + np.exp(- y * PHI @ w)).sum()
 
 def grad_log_loss(X, y, w):
@@ -216,7 +220,7 @@ def nesterov_gradient(y, X, w0, L, k_max):
         w_ = w  + beta * (w - w_old)
         w_old = w
         w = w_ - 1/L * grad_log_loss(PHI, y, w_).reshape((3, 1))
-        E_.append(log_loss(y, sigmoid(PHI @ w)))
+        E_.append(log_loss(X, y, w))
         # E_.append(log_loss(PHI, y, w))
         if (k-1)%10 == 0:      
             E_app = approx_fprime(w.flatten(), lambda w__: log_loss(PHI, y, w__), 1e-8)
@@ -267,7 +271,7 @@ def svm_primal():
     y_test_pred = np.sign(feature_transform(X_test) @ w )
 
 
-    support_vectors = y_train.reshape((100,1)) * (feature_transform(X_train) @ w) #+ 
+    support_vectors = y_train.reshape((100,1)) * (feature_transform(X_train) @ w) #+
     b = w[0]
     
     sv_indices_c1 = np.nonzero(np.isclose(np.round(support_vectors, 2),  1/np.linalg.norm(w), atol=0.1))[0]
@@ -304,8 +308,7 @@ def __plots_svm_primal(ax, PHI, X_train, w, marker_size, sv_indices_c1, sv_indic
     # plot the support vectors
     ax.scatter(X_train[sv_indices_c1, 0], X_train[sv_indices_c1, 1], marker_size + 50, facecolors='none', edgecolors='k', marker='o', label='train data')  # class 1
     ax.scatter(X_train[sv_indices_c2, 0], X_train[sv_indices_c2, 1], marker_size + 50, facecolors='none', edgecolors='k', marker='o', label='train data')  # class 1
-    
-    plt.show()
+
 
 def plot_decision_boundary(X, w, ax):
 
@@ -343,6 +346,7 @@ def __proximal_subgradient_method(PHI, y, alpha, lambda_, w_i_1, delta):
     loss = []
 
     while (42):
+        epoch += 1
         b = np.mean(y.reshape(100, 1) - (PHI @ w_i_1))
         # b = np.mean(-1 + y.reshape(100, 1) * (PHI @ w_i_1))
         w_schlange = np.concatenate((b.reshape(1, 1), w_i_1[1:]))
@@ -362,14 +366,16 @@ def __proximal_subgradient_method(PHI, y, alpha, lambda_, w_i_1, delta):
         grad_diff = np.abs(g.flatten() - numerical_grad).flatten()
 
         w_diff = np.abs(w_i_1_schlange - w_i_1_schlange_old).flatten()
-        print(f'Gradient, w and b diff for iteration {epoch} = {grad_diff} | {w_diff} | {b} | {l}.')
+        if epoch % 100 == 0:
+            print(f'Gradient, w and b diff for iteration {epoch} = {grad_diff} | {w_diff} | {b} | {l}.')
 
-        if np.all(w_diff < delta):
+        # if np.all(w_diff < delta):
+        #     return w_i_1_schlange, loss
+
+        if epoch > 1 and np.abs(loss[-1] - loss[-2]) < delta:
             return w_i_1_schlange, loss
 
         w_i_1_schlange_old = w_i_1_schlange
-
-        epoch += 1
 
     print(f'Proximal subgradient method converged after {epoch} epochs using delta = {delta} for all coordinates of gradient vector.')
 
@@ -394,9 +400,11 @@ def create_kernel(Xn, Xm, sigma):
     return K_matrix
 
 
+
 def Q(y, K):
     Q_ = np.zeros_like(K)
     Q_ = (y @ y.T) * K
+
     return Q_
 
 
@@ -435,7 +443,7 @@ def projected_gradient_ascent(N, step_size, y, K, delta):
             return a_i_1, loss
 
         a_i = a_i_1
-        
+
 
 def plot_svm_dual(X, y, y_pred, alpha, ax):
 
@@ -453,25 +461,35 @@ def plot_svm_dual(X, y, y_pred, alpha, ax):
     ax.legend()
 
 
-def decision_boundary_svm_dual(ax, Xn, y, alpha):
-    plot_step = 0.1
-    res = 50
-    # to check if it is really correct
-    x_min, x_max = Xn[:, 0].min(), Xn[:, 0].max()
-    y_min, y_max = Xn[:, 1].min(), Xn[:, 1].max()
-    xx, yy = np.meshgrid(np.linspace(x_min, x_max, res),
-                         np.linspace(x_min, x_max, res))
+def decision_boundary_svm_dual(ax, X, y, K, a, sigma, plot_step=0.2):
+    x_min, x_max = X[:, 0].min(), X[:, 0].max()
+    y_min, y_max = X[:, 1].min(), X[:, 1].max()
+    xx, yy = np.meshgrid(np.linspace(x_min, x_max, 100), np.linspace(y_min, y_max, 100))
+    grid = np.c_[xx.ravel(), yy.ravel()]
 
-    # PHI = feature_transform(np.c_[xx.ravel(), yy.ravel()])
-    X = np.c_[xx.ravel(), yy.ravel()]
-    Z = (alpha.T @ create_kernel(Xn, X, 1)).T @ alpha.T
-    
-    #Z = Z.reshape(xx.shape)
-    hyperplane = np.where(np.round(Z, 2) == 0, 1, 0)
-    #ax.matshow(Z)
-    xx, yy = np.meshgrid(np.linspace(x_min, x_max, res),
-                         np.linspace(x_min, x_max, res))
-    ax.contour(xx, yy, hyperplane, colors='black')
+    Z = (create_kernel(grid, X, sigma) @ (a * y))
+
+    #plotSVM(w, ax)
+    Z = Z.reshape(xx.shape)
+
+    ax.imshow(
+        Z,
+        interpolation="nearest",
+        extent=(xx.min(), xx.max(), yy.min(), yy.max()),
+        aspect="auto",
+        origin="lower",
+        cmap=plt.cm.PuOr_r,
+    )
+
+    # class1 = np.where(np.round(Z, 2) == 1, 1, 0)
+    # ax.contour(xx, yy, class1, colors='grey')
+
+    # class2 = np.where(np.round(Z, 2) == -1, 1, 0)
+    # ax.contour(xx, yy, class2, colors='grey')
+
+
+def bias(alpha, yi, yj, K):
+    return np.mean(yi.T - yj * (alpha.T @ K))
 
 
 def svm_dual():
@@ -523,6 +541,7 @@ def svm_dual():
     # plots
 
     # TODO: calculate support vectors in dual form
+    # (kernel_train @ a) * y_train
 
     plot_svm_dual(X_train, y_train, y_train_pred, a, ax[1])
     plot_svm_dual(X_test, y_test, y_test_pred, a, ax[2])
@@ -534,7 +553,13 @@ def svm_dual():
 
 
     #TODO: implement decision boundary
-    # decision_boundary_svm_dual(ax[1], X_train, y_train, a)
+
+    # w = np.sum(a * y_train * kernel_train)
+
+
+
+
+    decision_boundary_svm_dual(ax[1], X_train, y_train, kernel_train, a, sigma)
     plt.show()
 
     """ End of your code
@@ -553,7 +578,7 @@ if __name__ == '__main__':
     sigmoid = (lambda x: 1/(1+np.exp(-x)))
 
     # tasks = [quadratic, logistic, svm_primal, svm_dual]
-    tasks = [svm_primal]
+    tasks = [logistic]
     pdf = PdfPages('figures.pdf')
     for task in tasks:
         f = task()
