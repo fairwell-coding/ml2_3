@@ -439,6 +439,8 @@ def projected_gradient_ascent(N, step_size, y, K, delta):
         epochs += 1
         a_i_1 = np.maximum(0, a_i + step_size * grad_D(a_i, Q_))
 
+        # TODO: verify gradient
+
         # Check convergence
         a_diff = np.sum(np.abs(a_i_1 - a_i))
         if epochs % 100 == 0:
@@ -451,7 +453,7 @@ def projected_gradient_ascent(N, step_size, y, K, delta):
         a_i = a_i_1
 
 
-def plot_svm_dual(X, y, y_pred, alpha, ax):        # plot data points
+def plot_svm_dual(X, y, y_pred, alpha, ax):
 
     marker_size = 60
     c1_ind = np.nonzero(y == 1)
@@ -545,10 +547,15 @@ def svm_dual():
     print(f'SVM dual space: train_acc = {train_acc}, test_acc = {test_acc}')
 
     # plots
+
+    (kernel_train @ a) * y_train
+
+    # TODO: calculate support vectors in dual form
+
     plot_svm_dual(X_train, y_train, y_train_pred, a, ax[1])
     plot_svm_dual(X_test, y_test, y_test_pred, a, ax[2])
     #TODO: implement decision boundary
-    # decision_boundary_svm_dual(ax[1], X_train, y_train, alpha)
+    # decision_boundary_svm_dual(ax[1], X_train, y_train, a)
     plt.show()
 
     """ End of your code
