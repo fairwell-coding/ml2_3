@@ -28,8 +28,8 @@ def load_data():
     """ Start of your code 
     """
 
-    data_a_train, data_a_test = np.load('src/data_a_test.npy'), np.load('src/data_a_test.npy')
-    data_b_train, data_b_test = np.load('src/data_b_train.npy'), np.load('src/data_b_test.npy')
+    data_a_train, data_a_test = np.load('data_a_test.npy'), np.load('data_a_test.npy')
+    data_b_train, data_b_test = np.load('data_b_train.npy'), np.load('data_b_test.npy')
 
     """ End of your code
     """
@@ -270,7 +270,7 @@ def svm_primal():
     w = np.concatenate([b.reshape((1,1)), w])
     #w = w / np.linalg.norm(w)
 
-    support_vectors = y_train.reshape((100,1)) * (feature_transform(X_train) @ w) #+ 
+    support_vectors = y_train.reshape((100,1)) * (feature_transform(X_train) @ w) #+
     y_train_pred = np.sign(feature_transform(X_train) @ w )
     y_test_pred = np.sign(feature_transform(X_test) @ w )
 
@@ -309,7 +309,7 @@ def __plots_svm_primal(ax, PHI, X_train, w, marker_size, sv_indices_c1, sv_indic
     # plot the support vectors
     ax.scatter(X_train[sv_indices_c1, 0], X_train[sv_indices_c1, 1], marker_size + 50, facecolors='none', edgecolors='k', marker='o', label='train data')  # class 1
     ax.scatter(X_train[sv_indices_c2, 0], X_train[sv_indices_c2, 1], marker_size + 50, facecolors='none', edgecolors='k', marker='o', label='train data')  # class 1
-    
+
 
 
 def plot_decision_boundary(X, w, ax):
@@ -478,6 +478,9 @@ def decision_boundary_svm_dual(ax, X, y, K, a, sigma, plot_step=0.2):
         cmap=plt.cm.PuOr_r,
     )
 
+    decision_boundary = np.where(np.round(Z, 1) == 0, 1, 0)
+    ax.contour(xx, yy, decision_boundary, colors='k')
+
     # class1 = np.where(np.round(Z, 2) == 1, 1, 0)
     # ax.contour(xx, yy, class1, colors='grey')
 
@@ -548,15 +551,8 @@ def svm_dual():
     ax[0].set_xlabel('iterations')
     ax[0].set_ylabel('$D(\mathbf{a})$')
 
-
-    #TODO: implement decision boundary
-
-    # w = np.sum(a * y_train * kernel_train)
-
-
-
-
     decision_boundary_svm_dual(ax[1], X_train, y_train, kernel_train, a, sigma)
+    decision_boundary_svm_dual(ax[2], X_train, y_train, kernel_train, a, sigma)
     plt.show()
 
     """ End of your code
@@ -574,8 +570,7 @@ if __name__ == '__main__':
     data_a_train, data_a_test, data_b_train, data_b_test = load_data()
     sigmoid = (lambda x: 1/(1+np.exp(-x)))
 
-    # tasks = [quadratic, logistic, svm_primal, svm_dual]
-    tasks = [svm_primal]
+    tasks = [quadratic, logistic, svm_primal, svm_dual]
     pdf = PdfPages('figures.pdf')
     for task in tasks:
         f = task()
