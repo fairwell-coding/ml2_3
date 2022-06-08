@@ -349,7 +349,6 @@ def plot_decision_boundary(X, w, ax, b, plot_step=0.01):
     ax.plot(dx1, dx2, '-', color="grey", linewidth=1.0)
 
 
-
 def __proximal_subgradient_method(PHI, y, alpha, lambda_, w_i_1, delta):
     N = y.shape[0]
     epoch = 0
@@ -429,7 +428,7 @@ def grad_D(alpha, Q_):
 
 
 def projected_gradient_ascent(N, step_size, y, K, delta):
-    """ Projected gradient descent as described in algorithm 3.
+    """ task 4: Projected gradient descent as described in algorithm 3.
     """
 
     a_i = np.zeros((N, 1))  # initialize Lagrange coefficients
@@ -452,27 +451,20 @@ def projected_gradient_ascent(N, step_size, y, K, delta):
         a_i = a_i_1
 
 
-def predict_svm_dual(y, alpha, K, b=0):
-    # return y @ ((alpha.T @ K).T @ alpha.T) + b
-
-
-
-    return - 1 / alpha * K * alpha
-
-
 def plot_svm_dual(X, y, y_pred, alpha, ax):        # plot data points
 
     marker_size = 60
     c1_ind = np.nonzero(y == 1)
     c2_ind = np.nonzero(y == -1)
-    ax.scatter(X[c1_ind, 0], X[c1_ind, 1], marker_size, c='blue', marker='o', label='train data +')  # class 1
-    ax.scatter(X[c2_ind, 0], X[c2_ind, 1], marker_size, c='red', marker='o', label='train data x')  # class -1
+    ax.scatter(X[c1_ind, 0], X[c1_ind, 1], marker_size, c='blue', marker='o', label='train data')  # class 1
+    ax.scatter(X[c2_ind, 0], X[c2_ind, 1], marker_size, c='red', marker='o', label='train data')  # class -1
     
-    # TODO: prediction is not -1 and 1...??
-    c1_ind = np.nonzero(y_pred > 0)
-    c2_ind = np.nonzero(y_pred == 0)
-    ax.scatter(X[c1_ind, 0], X[c1_ind, 1], marker_size, c='k', marker='+', label='train data pred +')  # class 1
-    ax.scatter(X[c2_ind, 0], X[c2_ind, 1], marker_size, c='k', marker='x', label='train data pred x')  # class -1
+    c1_ind = np.argwhere(y_pred == 1)
+    c2_ind = np.argwhere(y_pred == -1)
+    ax.scatter(X[c1_ind, 0], X[c1_ind, 1], marker_size, c='k', marker='+', label='train data pred')  # class 1
+    ax.scatter(X[c2_ind, 0], X[c2_ind, 1], marker_size, c='k', marker='x', label='train data pred')  # class -1
+
+    ax.legend()
 
 
 def decision_boundary_svm_dual(ax, Xn, y, alpha):
@@ -544,16 +536,17 @@ def svm_dual():
 
     kernel_train = create_kernel(X_train, X_train, sigma)
     kernel_test = create_kernel(X_test, X_train, sigma)
-    alpha = projected_gradient_ascent(N_train, step_size, y_train, kernel_train, delta)
+    a = projected_gradient_ascent(N_train, step_size, y_train, kernel_train, delta)
 
-    y_train_pred = np.sign((kernel_train @ alpha) * y_train)
-    y_test_pred = np.sign((kernel_test @ alpha) * y_test)
+    y_train_pred = np.sign((kernel_train @ a) * y_train)
+    y_test_pred = np.sign((kernel_test @ a) * y_test)
     train_acc, test_acc = len(np.nonzero(y_train == y_train_pred)[0]) / N_train, len(np.nonzero(y_test == y_test_pred)[0]) / N_test
 
     print(f'SVM dual space: train_acc = {train_acc}, test_acc = {test_acc}')
 
     # plots
-    # plot_svm_dual(X_train, y_train, y_pred_train, alpha, ax[1])
+    plot_svm_dual(X_train, y_train, y_train_pred, a, ax[1])
+    plot_svm_dual(X_test, y_test, y_test_pred, a, ax[2])
     #TODO: implement decision boundary
     # decision_boundary_svm_dual(ax[1], X_train, y_train, alpha)
     plt.show()
